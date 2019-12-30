@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math';
 
 import 'package:clock/baijiaxing.dart';
@@ -6,20 +7,62 @@ import 'package:intl/intl.dart' as intl;
 
 import 'digit_path_calculate.dart';
 
-class Clock extends StatelessWidget {
+class Clock extends StatefulWidget {
+  @override
+  _ClockState createState() => _ClockState();
+}
+
+const kConcurrentDropAnimation = 10;
+
+class _ClockState extends State<Clock> with TickerProviderStateMixin {
+  HashMap<int, double> _fractions = HashMap();
+  HashMap<Animation<double>, int> _animationIndex = HashMap();
+
+  @override
+  void initState() {
+    super.initState();
+
+    for (int i = 0; i < kConcurrentDropAnimation; i++) {
+      var random = Random(DateTime.now().millisecondsSinceEpoch);
+      var controller = AnimationController(
+          duration: Duration(milliseconds: random.nextInt(3000) + 1000),
+          vsync: this);
+
+      var index = random.nextInt(10000);
+      var animation = Tween(begin: 0.0, end: 1.0).animate(controller);
+      _animationIndex[animation] = index;
+      animation.addListener(() {
+        setState(() {
+          _fractions[_animationIndex[animation]] = animation.value;
+        });
+      });
+      animation.addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          _fractions.remove(_animationIndex[animation]);
+          var random = Random(DateTime.now().millisecondsSinceEpoch);
+          var newIndex = random.nextInt(10000);
+          _animationIndex[animation] = newIndex;
+          controller.reset();
+          controller.forward();
+        }
+      });
+      controller.forward();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
       color: Colors.black,
       child: CustomPaint(
         size: Size.infinite,
-        painter: ClockPainter(),
+        painter: ClockPainter(HashMap.from(_fractions)),
       ),
     );
   }
 }
 
-const int kTotalDigits = 4;
+const int kTotalDigits = 6;
 
 const int kDigitWidthPixel = 5;
 const int kDigitHeightPixel = 9;
@@ -50,7 +93,7 @@ int clockBottom = 0;
 
 Size lastSize;
 
-final circlePaint = Paint()..color = Colors.red.withOpacity(0.05);
+final circlePaint = Paint()..color = Colors.red.withOpacity(0.5);
 final clockPaint = Paint()..color = Colors.green.withOpacity(0.05);
 final centerPaint = Paint()..color = Colors.blue.withOpacity(0.8);
 final digitPaint = Paint()..color = Colors.green.withOpacity(0.4);
@@ -59,6 +102,9 @@ TextStyle textStyle;
 TextStyle highlightedTextStyle;
 
 class ClockPainter extends CustomPainter {
+  HashMap<int, double> _fractions;
+  ClockPainter(this._fractions);
+
   @override
   void paint(Canvas canvas, Size size) {
     if (lastSize != size) {
@@ -86,7 +132,16 @@ class ClockPainter extends CustomPainter {
     }
 
     _drawDigits(
-        canvas, digitPaint, intl.DateFormat("HHmm").format(DateTime.now()));
+        canvas, digitPaint, intl.DateFormat("HHmmss").format(DateTime.now()));
+
+    _fractions.forEach((index, fraction) {
+      int left = index % actualTotalWidthPixel;
+      int top = (actualTotalHeightPixel * fraction).floor();
+      for (int j = 0; j < 9; j++) {
+        _drawTextAt(canvas, left, top - j,
+            textStyle.apply(color: Colors.green.withOpacity(0.9 - 0.1 * j)));
+      }
+    });
   }
 
   void _reCalculate(Size size) {
@@ -131,7 +186,10 @@ class ClockPainter extends CustomPainter {
     );
   }
 
-  void _drawTextAt(int i, int j, TextStyle textStyle, Canvas canvas) {
+  void _drawTextAt(Canvas canvas, int i, int j, TextStyle textStyle) {
+    if (i < 0 || j < 0) {
+      return;
+    }
     final textSpan = TextSpan(
       text: baijiaxing[
           (((actualTotalWidthPixel - i - 1) * actualTotalHeightPixel + j) %
@@ -171,8 +229,8 @@ class ClockPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(CustomPainter oldDelegate) {
-    return false;
+  bool shouldRepaint(ClockPainter oldDelegate) {
+    return oldDelegate._fractions != _fractions;
   }
 
   _drawDigits(Canvas canvas, Paint paint, String digits) {
@@ -187,7 +245,7 @@ class ClockPainter extends CustomPainter {
         if (DigitPathCalculate.onDigitPath(
             digit, i, j, kDigitWidthPixel, kDigitHeightPixel)) {
           _drawCircleAt(canvas, left + i, top + j, paint);
-          _drawTextAt(left + i, top + j, highlightedTextStyle, canvas);
+          // _drawTextAt(canvas, left + i, top + j, highlightedTextStyle);
         }
       }
     }
