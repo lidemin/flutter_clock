@@ -12,7 +12,7 @@ class Clock extends StatefulWidget {
   _ClockState createState() => _ClockState();
 }
 
-const kConcurrentDropAnimation = 10;
+const kConcurrentDropAnimation = 20;
 
 class _ClockState extends State<Clock> with TickerProviderStateMixin {
   HashMap<int, double> _fractions = HashMap();
@@ -96,7 +96,7 @@ Size lastSize;
 final circlePaint = Paint()..color = Colors.red.withOpacity(0.5);
 final clockPaint = Paint()..color = Colors.green.withOpacity(0.05);
 final centerPaint = Paint()..color = Colors.blue.withOpacity(0.8);
-final digitPaint = Paint()..color = Colors.green.withOpacity(0.4);
+final digitPaint = Paint()..color = Colors.green.withOpacity(0.8);
 
 TextStyle textStyle;
 TextStyle highlightedTextStyle;
@@ -137,9 +137,13 @@ class ClockPainter extends CustomPainter {
     _fractions.forEach((index, fraction) {
       int left = index % actualTotalWidthPixel;
       int top = (actualTotalHeightPixel * fraction).floor();
-      for (int j = 0; j < 9; j++) {
-        _drawTextAt(canvas, left, top - j,
-            textStyle.apply(color: Colors.green.withOpacity(0.9 - 0.1 * j)));
+      for (int j = 0; j < 20; j++) {
+        _drawTextAt(
+            canvas,
+            left,
+            top - j,
+            textStyle.apply(
+                color: Colors.green.withOpacity(0.9 * (1 - j / 20))));
       }
     });
   }
