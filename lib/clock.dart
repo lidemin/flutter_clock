@@ -1,4 +1,3 @@
-import 'dart:collection';
 import 'dart:math';
 
 import 'package:clock/baijiaxing.dart';
@@ -12,42 +11,30 @@ class Clock extends StatefulWidget {
   _ClockState createState() => _ClockState();
 }
 
-const kConcurrentDropAnimation = 20;
-
-class _ClockState extends State<Clock> with TickerProviderStateMixin {
-  HashMap<int, double> _fractions = HashMap();
-  HashMap<Animation<double>, int> _animationIndex = HashMap();
-
+class _ClockState extends State<Clock> with SingleTickerProviderStateMixin {
+  int lastDrawTimestamp = 0;
+  // if it is 25ms, it will be equivalent as 60+fps
+  final int frameThrottling = 100;
   @override
   void initState() {
     super.initState();
 
-    for (int i = 0; i < kConcurrentDropAnimation; i++) {
-      var random = Random(DateTime.now().millisecondsSinceEpoch);
-      var controller = AnimationController(
-          duration: Duration(milliseconds: random.nextInt(3000) + 1000),
-          vsync: this);
+    var controller = AnimationController(
+        duration: Duration(milliseconds: 10000), vsync: this);
 
-      var index = random.nextInt(10000);
-      var animation = Tween(begin: 0.0, end: 1.0).animate(controller);
-      _animationIndex[animation] = index;
-      animation.addListener(() {
-        setState(() {
-          _fractions[_animationIndex[animation]] = animation.value;
-        });
+    var animation = Tween(begin: 0.0, end: 1.0).animate(controller);
+    animation.addListener(() {
+      // drop frames within [frameThrottling]ms
+      if (DateTime.now().millisecondsSinceEpoch - lastDrawTimestamp <
+          frameThrottling) {
+        return;
+      }
+      // might be able to replace this with pure ticker
+      setState(() {
+        lastDrawTimestamp = DateTime.now().millisecondsSinceEpoch;
       });
-      animation.addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          _fractions.remove(_animationIndex[animation]);
-          var random = Random(DateTime.now().millisecondsSinceEpoch);
-          var newIndex = random.nextInt(10000);
-          _animationIndex[animation] = newIndex;
-          controller.reset();
-          controller.forward();
-        }
-      });
-      controller.forward();
-    }
+    });
+    controller.repeat();
   }
 
   @override
@@ -56,7 +43,7 @@ class _ClockState extends State<Clock> with TickerProviderStateMixin {
       color: Colors.black,
       child: CustomPaint(
         size: Size.infinite,
-        painter: ClockPainter(HashMap.from(_fractions)),
+        painter: ClockPainter(lastDrawTimestamp),
       ),
     );
   }
@@ -98,17 +85,22 @@ final clockPaint = Paint()..color = Colors.green.withOpacity(0.05);
 final centerPaint = Paint()..color = Colors.blue.withOpacity(0.8);
 final digitPaint = Paint()..color = Colors.green.withOpacity(0.8);
 
+var drops = List<Drop>();
+
 TextStyle textStyle;
 TextStyle highlightedTextStyle;
 
 const int kDropLength = 50;
+const int kConcurrentDrops = 10;
 var dropTextColors = List(kDropLength);
 
-int lastRenderTimestamp = 0;
-
 class ClockPainter extends CustomPainter {
-  HashMap<int, double> _fractions;
-  ClockPainter(this._fractions);
+  final int _lastDrawTimestamp;
+  ClockPainter(this._lastDrawTimestamp) {
+    for (int i = 0; i < kConcurrentDrops; i++) {
+      drops.add(Drop()..reset());
+    }
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -116,8 +108,6 @@ class ClockPainter extends CustomPainter {
       lastSize = size;
       _reCalculate(size);
     }
-
-    lastRenderTimestamp = DateTime.now().millisecondsSinceEpoch;
 
     // for (int i = 0; i < actualTotalWidthPixel; i++) {
     //   for (int j = 0; j < actualTotalHeightPixel; j++) {
@@ -138,17 +128,32 @@ class ClockPainter extends CustomPainter {
     //   }
     // }
 
+    for (int i = 0; i < kConcurrentDrops; i++) {
+      int left = drops[i].column % actualTotalWidthPixel;
+      int top = drops[i].rowOfCurrentBottom;
+      for (int j = 0; j < kDropLength; j++) {
+        _drawTextAt(canvas, left, top - j, dropTextColors[j]);
+      }
+      // calculate next frame of this drop
+      if (top - kDropLength > actualTotalHeightPixel) {
+        drops[i].reset();
+      }
+
+      drops[i].rowOfCurrentBottom += drops[i].rowInterval;
+      drops[i].lastRenderTimestamp = _lastDrawTimestamp;
+    }
+
     _drawDigits(
         canvas, digitPaint, intl.DateFormat("HHmmss").format(DateTime.now()));
 
-    _fractions.forEach((index, fraction) {
-      int left = index % actualTotalWidthPixel;
-      int top = (actualTotalHeightPixel * fraction).floor();
-      for (int j = 0; j < kDropLength; j++) {
-        _drawTextAt(canvas, left, top - (j * (1 - fraction / 2)).floor(),
-            dropTextColors[min((j * (1 + fraction)).floor(), kDropLength - 1)]);
-      }
-    });
+    // _fractions.forEach((index, fraction) {
+    //   int left = index % actualTotalWidthPixel;
+    //   int top = (actualTotalHeightPixel * fraction).floor();
+    //   for (int j = 0; j < kDropLength; j++) {
+    //     _drawTextAt(canvas, left, top - (j * (1 - fraction / 2)).floor(),
+    //         dropTextColors[min((j * (1 + fraction)).floor(), kDropLength - 1)]);
+    //   }
+    // });
   }
 
   void _reCalculate(Size size) {
@@ -242,11 +247,7 @@ class ClockPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(ClockPainter oldDelegate) {
-    // no need to re-draw within 100ms
-    if (DateTime.now().millisecondsSinceEpoch - lastRenderTimestamp < 50) {
-      return false;
-    }
-    return oldDelegate._fractions != _fractions;
+    return oldDelegate._lastDrawTimestamp != _lastDrawTimestamp;
   }
 
   _drawDigits(Canvas canvas, Paint paint, String digits) {
@@ -265,5 +266,22 @@ class ClockPainter extends CustomPainter {
         }
       }
     }
+  }
+}
+
+class Drop {
+  int column;
+  int rowOfCurrentBottom;
+  int length;
+  int lastRenderTimestamp;
+  int rowInterval;
+
+  reset() {
+    var random = Random(DateTime.now().millisecondsSinceEpoch);
+    column = random.nextInt(1000);
+    rowOfCurrentBottom = 0;
+    length = random.nextInt(20) + 20;
+    lastRenderTimestamp = 0;
+    rowInterval = random.nextInt(3) + 1; //
   }
 }
