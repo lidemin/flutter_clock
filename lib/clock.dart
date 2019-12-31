@@ -101,6 +101,11 @@ final digitPaint = Paint()..color = Colors.green.withOpacity(0.8);
 TextStyle textStyle;
 TextStyle highlightedTextStyle;
 
+const int kDropLength = 50;
+var dropTextColors = List(kDropLength);
+
+int lastRenderTimestamp = 0;
+
 class ClockPainter extends CustomPainter {
   HashMap<int, double> _fractions;
   ClockPainter(this._fractions);
@@ -112,24 +117,26 @@ class ClockPainter extends CustomPainter {
       _reCalculate(size);
     }
 
-    for (int i = 0; i < actualTotalWidthPixel; i++) {
-      for (int j = 0; j < actualTotalHeightPixel; j++) {
-        // draw circles as guideline
-        if (i == centerPixelDx && j == centerPixelDy) {
-          // _drawCircleAt(canvas, i, j, centerPaint);
-        } else if (i >= clockLeft &&
-            i <= clockRight &&
-            j >= clockTop &&
-            j <= clockBottom) {
-          // _drawCircleAt(canvas, i, j, clockPaint);
-        } else {
-          // _drawCircleAt(canvas, i, j, circlePaint);
-        }
+    lastRenderTimestamp = DateTime.now().millisecondsSinceEpoch;
 
-        // draw background text
-        // _drawTextAt(i, j, textStyle, canvas);
-      }
-    }
+    // for (int i = 0; i < actualTotalWidthPixel; i++) {
+    //   for (int j = 0; j < actualTotalHeightPixel; j++) {
+    //     // draw circles as guideline
+    //     if (i == centerPixelDx && j == centerPixelDy) {
+    //       // _drawCircleAt(canvas, i, j, centerPaint);
+    //     } else if (i >= clockLeft &&
+    //         i <= clockRight &&
+    //         j >= clockTop &&
+    //         j <= clockBottom) {
+    //       // _drawCircleAt(canvas, i, j, clockPaint);
+    //     } else {
+    //       // _drawCircleAt(canvas, i, j, circlePaint);
+    //     }
+
+    //     // draw background text
+    //     // _drawTextAt(i, j, textStyle, canvas);
+    //   }
+    // }
 
     _drawDigits(
         canvas, digitPaint, intl.DateFormat("HHmmss").format(DateTime.now()));
@@ -137,13 +144,9 @@ class ClockPainter extends CustomPainter {
     _fractions.forEach((index, fraction) {
       int left = index % actualTotalWidthPixel;
       int top = (actualTotalHeightPixel * fraction).floor();
-      for (int j = 0; j < 20; j++) {
-        _drawTextAt(
-            canvas,
-            left,
-            top - j,
-            textStyle.apply(
-                color: Colors.green.withOpacity(0.9 * (1 - j / 20))));
+      for (int j = 0; j < kDropLength; j++) {
+        _drawTextAt(canvas, left, top - (j * (1 - fraction / 2)).floor(),
+            dropTextColors[min((j * (1 + fraction)).floor(), kDropLength - 1)]);
       }
     });
   }
@@ -181,6 +184,11 @@ class ClockPainter extends CustomPainter {
       fontSize: squareSize * 5 / 9,
       height: 1,
     );
+
+    for (int i = 0; i < kDropLength; i++) {
+      dropTextColors[i] = textStyle.apply(
+          color: Colors.green.withOpacity(0.9 * (1 - i / kDropLength)));
+    }
 
     highlightedTextStyle = TextStyle(
       color: Colors.green.withOpacity(0.9),
@@ -234,6 +242,10 @@ class ClockPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(ClockPainter oldDelegate) {
+    // no need to re-draw within 100ms
+    if (DateTime.now().millisecondsSinceEpoch - lastRenderTimestamp < 50) {
+      return false;
+    }
     return oldDelegate._fractions != _fractions;
   }
 
