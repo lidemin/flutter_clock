@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' as intl;
 
 import 'digit_path_calculate.dart';
@@ -17,6 +18,11 @@ class _ClockDigitLayerState extends State<ClockDigitLayer>
   @override
   void initState() {
     super.initState();
+
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
 
     _controller = AnimationController(
       duration: const Duration(milliseconds: 100),
@@ -45,9 +51,11 @@ class DigitsContainer extends AnimatedWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      child: CustomPaint(
-        size: Size.infinite,
-        painter: ClockPainter(DateTime.now().millisecondsSinceEpoch),
+      child: RepaintBoundary(
+        child: CustomPaint(
+          size: Size.infinite,
+          painter: ClockPainter(DateTime.now().millisecondsSinceEpoch),
+        ),
       ),
     );
   }
@@ -92,6 +100,8 @@ final digitPaint = Paint()..color = Colors.green.withOpacity(0.8);
 class ClockPainter extends CustomPainter {
   final int _currentTimestamp;
   int _lastDrawTimestamp = 0;
+  final String _currentDrawDigits =
+      intl.DateFormat("HHmmss").format(DateTime.now());
   ClockPainter(this._currentTimestamp);
 
   @override
@@ -103,8 +113,8 @@ class ClockPainter extends CustomPainter {
 
     _lastDrawTimestamp = DateTime.now().microsecondsSinceEpoch;
 
-    _drawDigits(
-        canvas, digitPaint, intl.DateFormat("HHmmss").format(DateTime.now()));
+    // print("repaint digits: $_currentDrawDigits");
+    _drawDigits(canvas, digitPaint, _currentDrawDigits);
   }
 
   void _reCalculate(Size size) {
@@ -149,6 +159,9 @@ class ClockPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(ClockPainter oldDelegate) {
+    if (oldDelegate._currentDrawDigits == _currentDrawDigits) {
+      return false;
+    }
     return _currentTimestamp - oldDelegate._lastDrawTimestamp > 150;
   }
 
