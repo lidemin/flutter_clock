@@ -19,6 +19,7 @@ class _ClockDigitLayerState extends State<ClockDigitLayer>
   void initState() {
     super.initState();
 
+    SystemChrome.setEnabledSystemUIOverlays([]);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,

@@ -93,7 +93,7 @@ class CharactorPainter extends CustomPainter {
     paddingVertical = (size.height - squareSize * actualTotalHeightPixel) / 2;
 
     textStyle = TextStyle(
-      color: Colors.green.withOpacity(0.9),
+      color: Colors.green.withOpacity(0.4),
       fontSize: squareSize * 5 / 9,
       height: 1,
     );
